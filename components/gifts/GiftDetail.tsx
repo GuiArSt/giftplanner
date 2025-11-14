@@ -12,6 +12,7 @@ interface User {
 interface Gift {
   id: string
   recipient_id: string
+  amount: number
   description: string | null
   status: 'pending' | 'in_progress' | 'done'
   organizer_id: string | null
@@ -24,10 +25,24 @@ interface Gift {
   created_by_user: User
 }
 
+interface Expense {
+  id: string
+  amount: number
+  description: string
+  created_at: string
+  created_by_user: User
+  contributors: Array<{
+    user_id: string
+    amount_paid: number
+    user: User
+  }>
+}
+
 interface GiftDetailProps {
   gift: Gift
   currentUserId: string
   allUsers: User[]
+  expenses: Expense[]
 }
 
 const statusOptions = [
@@ -36,7 +51,7 @@ const statusOptions = [
   { value: 'done', label: 'Done', color: 'bg-green-100 text-green-800' },
 ] as const
 
-export default function GiftDetail({ gift, currentUserId, allUsers }: GiftDetailProps) {
+export default function GiftDetail({ gift, currentUserId, allUsers, expenses }: GiftDetailProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [description, setDescription] = useState(gift.description || '')
   const [status, setStatus] = useState(gift.status)
@@ -289,6 +304,53 @@ export default function GiftDetail({ gift, currentUserId, allUsers }: GiftDetail
               </div>
             ) : (
               <p className="mt-1 text-gray-600">No contributors yet</p>
+            )}
+          </div>
+
+          {/* Expenses linked to this gift */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-gray-700">Expenses for this Gift</h3>
+            {expenses.length > 0 ? (
+              <div className="mt-3 space-y-3">
+                {expenses.map((expense) => (
+                  <div key={expense.id} className="rounded-md bg-gray-50 p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{expense.description}</p>
+                        <p className="mt-1 text-sm text-gray-600">
+                          Created by {expense.created_by_user.name} •{' '}
+                          {new Date(expense.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <p className="text-xl font-bold text-blue-600">€{expense.amount.toFixed(2)}</p>
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-gray-700">Contributors:</p>
+                      <div className="mt-1 space-y-1">
+                        {expense.contributors.map((contributor) => (
+                          <div key={contributor.user_id} className="flex justify-between text-sm">
+                            <span className="text-gray-600">{contributor.user.name}</span>
+                            <span className="font-medium text-gray-900">
+                              €{contributor.amount_paid.toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="mt-2 rounded-md bg-blue-50 p-3">
+                  <p className="text-sm font-medium text-blue-900">
+                    Total spent so far: €
+                    {expenses.reduce((sum, exp) => sum + exp.amount, 0).toFixed(2)} of €
+                    {gift.amount.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-gray-600">
+                No expenses yet. Create an expense and link it to this gift to track contributions.
+              </p>
             )}
           </div>
 

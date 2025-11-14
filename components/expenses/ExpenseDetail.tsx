@@ -26,10 +26,19 @@ interface Expense {
   }>
 }
 
+interface Gift {
+  id: string
+  description: string | null
+  amount: number
+  recipient: { id: string; name: string }
+  recipient_id?: string
+}
+
 interface ExpenseDetailProps {
-  expense: Expense
+  expense: Expense & { gift_id?: string | null }
   currentUserId: string
   allUsers: User[]
+  gifts: Gift[]
   isRecipient: boolean
 }
 
@@ -37,9 +46,11 @@ export default function ExpenseDetail({
   expense,
   currentUserId,
   allUsers,
+  gifts,
   isRecipient,
 }: ExpenseDetailProps) {
   const [isEditing, setIsEditing] = useState(false)
+  const [giftId, setGiftId] = useState(expense.gift_id || '')
   const [description, setDescription] = useState(expense.description)
   const [amount, setAmount] = useState(expense.amount.toString())
   const [contributorAmounts, setContributorAmounts] = useState<Record<string, string>>(
@@ -65,10 +76,16 @@ export default function ExpenseDetail({
         return
       }
 
+      if (!giftId) {
+        alert('Please select which gift this expense is for')
+        return
+      }
+
       // Update expense
       const { error: expenseError } = await supabase
         .from('expenses')
         .update({
+          gift_id: giftId,
           description,
           amount: amountNum,
         })
@@ -112,6 +129,7 @@ export default function ExpenseDetail({
   }
 
   const handleCancel = () => {
+    setGiftId(expense.gift_id || '')
     setDescription(expense.description)
     setAmount(expense.amount.toString())
     setContributorAmounts(
@@ -188,6 +206,29 @@ export default function ExpenseDetail({
 
       {isEditing ? (
         <div className="space-y-6">
+          {/* Gift Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Which Gift is this expense for?
+            </label>
+            <select
+              value={giftId}
+              onChange={(e) => setGiftId(e.target.value)}
+              required
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            >
+              <option value="">Select a gift...</option>
+              {gifts.map((gift) => (
+                <option key={gift.id} value={gift.id}>
+                  {gift.description || `Gift for ${gift.recipient.name}`} - €{gift.amount.toFixed(2)}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Link this expense to a specific gift for proper balance tracking
+            </p>
+          </div>
+
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Description</label>

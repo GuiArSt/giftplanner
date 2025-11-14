@@ -37,6 +37,21 @@ export default async function GiftDetailPage(props: { params: Promise<{ id: stri
   // Get all users for editing
   const { data: users } = await supabase.from('users').select('id, name').order('name')
 
+  // Get all expenses linked to this gift
+  const { data: expenses } = await supabase
+    .from('expenses')
+    .select(`
+      *,
+      created_by_user:users!expenses_created_by_fkey(id, name),
+      contributors:expense_contributors(
+        user_id,
+        amount_paid,
+        user:users(id, name)
+      )
+    `)
+    .eq('gift_id', params.id)
+    .order('created_at', { ascending: false })
+
   return (
     <div>
       <div className="mb-6 flex items-center gap-4">
@@ -47,7 +62,12 @@ export default async function GiftDetailPage(props: { params: Promise<{ id: stri
           ← Back to Gifts
         </Link>
       </div>
-      <GiftDetail gift={gift as any} currentUserId={user.id} allUsers={users || []} />
+      <GiftDetail
+        gift={gift as any}
+        currentUserId={user.id}
+        allUsers={users || []}
+        expenses={expenses || []}
+      />
     </div>
   )
 }

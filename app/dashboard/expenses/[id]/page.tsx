@@ -62,6 +62,25 @@ export default async function ExpenseDetailPage(props: { params: Promise<{ id: s
     .neq('id', expense.recipient_id)
     .order('name')
 
+  // Get all gifts where user is a contributor (for linking expense to gift)
+  const { data: giftsData } = await supabase
+    .from('gifts')
+    .select(`
+      id,
+      description,
+      amount,
+      recipient_id,
+      recipient:users!gifts_recipient_id_fkey(id, name)
+    `)
+    .neq('recipient_id', user.id)
+    .order('created_at', { ascending: false })
+
+  // Transform to match Gift interface
+  const gifts = giftsData?.map((g: any) => ({
+    ...g,
+    recipient: Array.isArray(g.recipient) ? g.recipient[0] : g.recipient
+  })) || []
+
   return (
     <div>
       <div className="mb-6 flex items-center gap-4">
@@ -76,6 +95,7 @@ export default async function ExpenseDetailPage(props: { params: Promise<{ id: s
         expense={expense as any}
         currentUserId={user.id}
         allUsers={users || []}
+        gifts={gifts}
         isRecipient={isRecipient}
       />
     </div>
