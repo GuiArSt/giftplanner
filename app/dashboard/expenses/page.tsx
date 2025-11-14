@@ -18,9 +18,9 @@ export default async function ExpensesPage() {
   // Get all users
   const { data: users } = await supabase.from('users').select('id, name').order('name')
 
-  // Get expenses with privacy filtering
-  // Completely hide expenses where user is the recipient (privacy)
-  const { data: expensesData } = await supabase
+  // Get ALL expenses user is involved in (creator, contributor, OR recipient)
+  // This is needed for accurate balance calculation
+  const { data: allExpensesData} = await supabase
     .from('expenses')
     .select(`
       *,
@@ -32,14 +32,15 @@ export default async function ExpensesPage() {
         user:users(id, name)
       )
     `)
-    .neq('recipient_id', user.id) // Hide gifts TO the current user
     .order('created_at', { ascending: false })
 
-  const expenses = expensesData || []
+  // Filter for display: hide expenses where user is recipient (privacy)
+  const expenses = allExpensesData?.filter((exp) => exp.recipient_id !== user.id) || []
 
-  // Prepare expenses for balance calculation
+  // Prepare ALL involved expenses for balance calculation
+  // Balance calculation needs ALL expenses user is involved in to be accurate
   const expensesForBalance: Expense[] =
-    expensesData?.map((exp) => ({
+    allExpensesData?.map((exp) => ({
       id: exp.id,
       recipient_id: exp.recipient_id,
       amount: exp.amount,
@@ -76,6 +77,3 @@ export default async function ExpensesPage() {
     </div>
   )
 }
-
-
-
