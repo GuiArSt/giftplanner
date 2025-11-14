@@ -112,7 +112,7 @@ export default async function DashboardPage() {
               {expensesCount}
             </p>
             <p className="text-sm text-gray-600 font-medium">
-              {isAdmin ? 'Total expenses' : 'Expenses you're involved in'}
+              {isAdmin ? 'Total expenses' : 'Expenses you\'re involved in'}
             </p>
           </div>
         </Link>
