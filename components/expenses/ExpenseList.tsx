@@ -126,3 +126,4 @@ export default function ExpenseList({ initialExpenses, currentUserId }: ExpenseL
 }
 
 
+
