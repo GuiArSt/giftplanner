@@ -100,6 +100,27 @@ export default function GiftDetail({ gift, currentUserId, allUsers }: GiftDetail
     setIsEditing(false)
   }
 
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this gift? This action cannot be undone.')) {
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const { error } = await supabase.from('gifts').delete().eq('id', gift.id)
+
+      if (error) throw error
+
+      // Redirect to gifts page
+      router.push('/dashboard/gifts')
+      router.refresh()
+    } catch (error) {
+      console.error('Error deleting gift:', error)
+      alert('Failed to delete gift. Please try again.')
+      setIsSubmitting(false)
+    }
+  }
+
   const currentStatus = statusOptions.find((s) => s.value === status)
 
   return (
@@ -121,12 +142,21 @@ export default function GiftDetail({ gift, currentUserId, allUsers }: GiftDetail
           </p>
         </div>
         {canEdit && !isEditing && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-          >
-            Edit
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              Edit
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isSubmitting}
+              className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-gray-400"
+            >
+              Delete
+            </button>
+          </div>
         )}
       </div>
 
