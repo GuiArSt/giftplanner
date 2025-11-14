@@ -32,6 +32,7 @@ export default function ExpenseForm({ users, gifts, currentUserId }: ExpenseForm
   const [giftId, setGiftId] = useState('')
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
+  const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal')
 
   // Participants: who benefits/shares the cost
   const [participants, setParticipants] = useState<Array<{ userId: string; shareAmount: string }>>([
@@ -104,19 +105,16 @@ export default function ExpenseForm({ users, gifts, currentUserId }: ExpenseForm
         throw new Error(`Total paid (€${totalPaid.toFixed(2)}) must equal expense amount (€${totalAmount.toFixed(2)})`)
       }
 
-      // Calculate total shares (for custom shares)
-      const totalCustomShares = validParticipants.reduce((sum, p) => {
-        if (p.shareAmount) {
-          return sum + parseFloat(p.shareAmount)
+      // Validate custom shares if in custom mode
+      if (splitMode === 'custom') {
+        const totalCustomShares = validParticipants.reduce((sum, p) => {
+          const shareAmount = parseFloat(p.shareAmount) || 0
+          return sum + shareAmount
+        }, 0)
+
+        if (Math.abs(totalCustomShares - totalAmount) > 0.01) {
+          throw new Error(`Custom shares (€${totalCustomShares.toFixed(2)}) must equal expense amount (€${totalAmount.toFixed(2)})`)
         }
-        return sum
-      }, 0)
-
-      const participantsWithoutCustom = validParticipants.filter(p => !p.shareAmount).length
-      const remainingAmount = totalAmount - totalCustomShares
-
-      if (participantsWithoutCustom > 0 && remainingAmount < 0) {
-        throw new Error('Custom shares exceed total amount')
       }
 
       // Create expense
@@ -235,13 +233,43 @@ export default function ExpenseForm({ users, gifts, currentUserId }: ExpenseForm
           <label className="block text-sm font-medium text-gray-700">
             Participants (who benefits/shares the cost)
           </label>
-          <button
-            type="button"
-            onClick={addParticipant}
-            className="text-sm text-blue-600 hover:text-blue-500"
-          >
-            + Add Participant
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-md border border-gray-300">
+              <button
+                type="button"
+                onClick={() => {
+                  setSplitMode('equal')
+                  // Clear custom amounts when switching to equal
+                  setParticipants(participants.map(p => ({ ...p, shareAmount: '' })))
+                }}
+                className={`px-3 py-1 text-sm ${
+                  splitMode === 'equal'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Equal Split
+              </button>
+              <button
+                type="button"
+                onClick={() => setSplitMode('custom')}
+                className={`px-3 py-1 text-sm ${
+                  splitMode === 'custom'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Custom
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={addParticipant}
+              className="text-sm text-blue-600 hover:text-blue-500"
+            >
+              + Add Participant
+            </button>
+          </div>
         </div>
         <div className="mt-2 space-y-3">
           {participants.map((participant, index) => (
@@ -259,15 +287,22 @@ export default function ExpenseForm({ users, gifts, currentUserId }: ExpenseForm
                   </option>
                 ))}
               </select>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={participant.shareAmount}
-                onChange={(e) => updateParticipant(index, 'shareAmount', e.target.value)}
-                placeholder="Share (empty = equal)"
-                className="w-40 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              />
+              {splitMode === 'custom' && (
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={participant.shareAmount}
+                  onChange={(e) => updateParticipant(index, 'shareAmount', e.target.value)}
+                  placeholder="Custom share"
+                  className="w-40 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                />
+              )}
+              {splitMode === 'equal' && amount && participants.filter(p => p.userId).length > 0 && (
+                <div className="flex w-40 items-center justify-end rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  €{(parseFloat(amount) / participants.filter(p => p.userId).length).toFixed(2)}
+                </div>
+              )}
               {participants.length > 1 && (
                 <button
                   type="button"
@@ -280,9 +315,15 @@ export default function ExpenseForm({ users, gifts, currentUserId }: ExpenseForm
             </div>
           ))}
         </div>
-        <p className="mt-2 text-xs text-gray-500">
-          Leave share empty for equal split. Example: €60 split equally among 3 people = €20 each
-        </p>
+        {splitMode === 'equal' ? (
+          <p className="mt-2 text-xs text-gray-500">
+            Cost will be split equally among all participants
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-gray-500">
+            Enter custom share amounts. They should add up to the total expense amount.
+          </p>
+        )}
       </div>
 
       <div className="border-t pt-4">
