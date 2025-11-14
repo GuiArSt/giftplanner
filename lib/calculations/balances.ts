@@ -1,8 +1,12 @@
 /**
- * Balance calculation logic for expense tracking
- * 
- * This calculates who owes what to whom based on expenses and contributions.
- * Uses a simplified settlement algorithm that minimizes transactions.
+ * Balance calculation logic for gift-based expense tracking
+ *
+ * This calculates who owes what to whom based on:
+ * 1. Each gift has a target amount and contributors
+ * 2. Each contributor has an allotment (custom or equal split)
+ * 3. Expenses are payments toward a gift
+ * 4. If someone pays more than their allotment → others owe them
+ * 5. If someone pays less than their allotment → they owe others
  */
 
 export interface ExpenseContributor {
@@ -10,11 +14,22 @@ export interface ExpenseContributor {
   amount_paid: number
 }
 
+export interface GiftContributor {
+  user_id: string
+  allotment: number | null // null means equal split
+}
+
 export interface Expense {
   id: string
-  recipient_id: string
+  gift_id: string
   amount: number
   contributors: ExpenseContributor[]
+}
+
+export interface Gift {
+  id: string
+  amount: number // target amount for the gift
+  contributors: GiftContributor[]
 }
 
 export interface Balance {
@@ -24,34 +39,78 @@ export interface Balance {
 }
 
 /**
- * Calculate balances between users based on expenses
- * 
+ * Calculate balances across all gifts
+ *
  * Algorithm:
- * 1. For each expense, calculate how much each contributor should pay (split equally)
- * 2. Track net balance: (amount_paid - amount_owed) for each user
- * 3. Generate settlement suggestions to minimize transactions
+ * 1. For each gift, determine each contributor's allotment
+ * 2. For each gift, sum up what each person actually paid (from expenses)
+ * 3. Calculate net balance: (amount_paid - allotment) for each user per gift
+ * 4. Aggregate across all gifts
+ * 5. Generate settlement suggestions to minimize transactions
  */
-export function calculateBalances(expenses: Expense[]): Balance[] {
-  // Track net balance for each user
+export function calculateBalances(gifts: Gift[], expenses: Expense[]): Balance[] {
+  // Track net balance for each user across all gifts
   const netBalances = new Map<string, number>()
 
-  // Process each expense
-  expenses.forEach(expense => {
-    const totalAmount = expense.amount
-    const contributorCount = expense.contributors.length
+  // Process each gift
+  gifts.forEach(gift => {
+    const giftAmount = gift.amount
+    const contributorCount = gift.contributors.length
 
     if (contributorCount === 0) return
 
-    const amountPerPerson = totalAmount / contributorCount
+    // Calculate what each person should pay (allotment)
+    const allotments = new Map<string, number>()
+    let totalCustomAllotment = 0
+    let contributorsWithoutCustom = 0
 
-    // For each contributor, calculate what they paid vs what they owe
-    expense.contributors.forEach(contributor => {
-      const currentBalance = netBalances.get(contributor.user_id) || 0
-      // Positive = they paid more than owed, Negative = they owe more
-      netBalances.set(
-        contributor.user_id,
-        currentBalance + (contributor.amount_paid - amountPerPerson)
-      )
+    gift.contributors.forEach(contributor => {
+      if (contributor.allotment !== null) {
+        allotments.set(contributor.user_id, contributor.allotment)
+        totalCustomAllotment += contributor.allotment
+      } else {
+        contributorsWithoutCustom++
+      }
+    })
+
+    // For contributors without custom allotment, split remaining equally
+    const remainingAmount = giftAmount - totalCustomAllotment
+    const equalSplitAmount = contributorsWithoutCustom > 0
+      ? remainingAmount / contributorsWithoutCustom
+      : 0
+
+    gift.contributors.forEach(contributor => {
+      if (contributor.allotment === null) {
+        allotments.set(contributor.user_id, equalSplitAmount)
+      }
+    })
+
+    // Calculate what each person actually paid for this gift
+    const actualPayments = new Map<string, number>()
+
+    // Initialize all contributors with 0 payments
+    gift.contributors.forEach(contributor => {
+      actualPayments.set(contributor.user_id, 0)
+    })
+
+    // Sum up expenses for this gift
+    const giftExpenses = expenses.filter(e => e.gift_id === gift.id)
+    giftExpenses.forEach(expense => {
+      expense.contributors.forEach(contributor => {
+        const currentPaid = actualPayments.get(contributor.user_id) || 0
+        actualPayments.set(contributor.user_id, currentPaid + contributor.amount_paid)
+      })
+    })
+
+    // Calculate net balance for this gift: paid - owed
+    gift.contributors.forEach(contributor => {
+      const userId = contributor.user_id
+      const allotment = allotments.get(userId) || 0
+      const paid = actualPayments.get(userId) || 0
+      const netForGift = paid - allotment
+
+      const currentBalance = netBalances.get(userId) || 0
+      netBalances.set(userId, currentBalance + netForGift)
     })
   })
 
@@ -60,7 +119,7 @@ export function calculateBalances(expenses: Expense[]): Balance[] {
   const creditors: Array<{ userId: string; amount: number }> = []
   const debtors: Array<{ userId: string; amount: number }> = []
 
-  // Separate creditors (positive balance) and debtors (negative balance)
+  // Separate creditors (positive balance = overpaid) and debtors (negative = underpaid)
   netBalances.forEach((balance, userId) => {
     if (balance > 0.01) {
       // Round to 2 decimals, ignore tiny amounts
@@ -70,7 +129,7 @@ export function calculateBalances(expenses: Expense[]): Balance[] {
     }
   })
 
-  // Match creditors with debtors
+  // Match creditors with debtors to minimize transactions
   let creditorIndex = 0
   let debtorIndex = 0
 
@@ -97,14 +156,15 @@ export function calculateBalances(expenses: Expense[]): Balance[] {
 }
 
 /**
- * Get net balance for a specific user
+ * Get net balance for a specific user across all gifts
  */
 export function getUserNetBalance(
   userId: string,
+  gifts: Gift[],
   expenses: Expense[]
 ): number {
-  const balances = calculateBalances(expenses)
-  
+  const balances = calculateBalances(gifts, expenses)
+
   let netBalance = 0
   balances.forEach(balance => {
     if (balance.from_user_id === userId) {
@@ -117,5 +177,9 @@ export function getUserNetBalance(
   return Math.round(netBalance * 100) / 100
 }
 
-
-
+/**
+ * Calculate balance for a specific gift
+ */
+export function calculateGiftBalance(gift: Gift, expenses: Expense[]): Balance[] {
+  return calculateBalances([gift], expenses)
+}

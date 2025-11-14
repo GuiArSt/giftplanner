@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import ExpenseList from '@/components/expenses/ExpenseList'
 import BalanceDisplay from '@/components/expenses/BalanceDisplay'
 import Link from 'next/link'
-import { calculateBalances, type Expense } from '@/lib/calculations/balances'
+import { type Expense, type Gift } from '@/lib/calculations/balances'
 
 export default async function ExpensesPage() {
   const supabase = await createClient()
@@ -25,9 +25,20 @@ export default async function ExpensesPage() {
   // Get all users
   const { data: users } = await supabase.from('users').select('id, name').order('name')
 
-  // Get ALL expenses user is involved in (creator, contributor, OR recipient)
-  // This is needed for accurate balance calculation
-  const { data: allExpensesData} = await supabase
+  // Get ALL gifts user is involved in (for balance calculation)
+  const { data: allGiftsData } = await supabase
+    .from('gifts')
+    .select(`
+      *,
+      contributors:gift_contributors(
+        user_id,
+        allotment
+      )
+    `)
+    .order('created_at', { ascending: false})
+
+  // Get ALL expenses (linked to gifts)
+  const { data: allExpensesData } = await supabase
     .from('expenses')
     .select(`
       *,
@@ -44,12 +55,21 @@ export default async function ExpensesPage() {
   // Filter for display: hide expenses where user is recipient (privacy)
   const expenses = allExpensesData?.filter((exp) => exp.recipient_id !== user.id) || []
 
-  // Prepare ALL involved expenses for balance calculation
-  // Balance calculation needs ALL expenses user is involved in to be accurate
+  // Prepare data for balance calculation
+  const giftsForBalance: Gift[] =
+    allGiftsData?.map((g) => ({
+      id: g.id,
+      amount: g.amount,
+      contributors: g.contributors.map((c: any) => ({
+        user_id: c.user_id,
+        allotment: c.allotment,
+      })),
+    })) || []
+
   const expensesForBalance: Expense[] =
     allExpensesData?.map((exp) => ({
       id: exp.id,
-      recipient_id: exp.recipient_id,
+      gift_id: exp.gift_id,
       amount: exp.amount,
       contributors: exp.contributors.map((c: any) => ({
         user_id: c.user_id,
@@ -75,6 +95,7 @@ export default async function ExpensesPage() {
         </div>
         <div>
           <BalanceDisplay
+            gifts={giftsForBalance}
             expenses={expensesForBalance}
             users={users || []}
             currentUserId={user.id}

@@ -1,16 +1,17 @@
 'use client'
 
-import { calculateBalances, type Expense } from '@/lib/calculations/balances'
+import { calculateBalances, type Expense, type Gift } from '@/lib/calculations/balances'
 
 interface BalanceDisplayProps {
+  gifts: Gift[]
   expenses: Expense[]
   users: Array<{ id: string; name: string }>
   currentUserId: string
   isAdmin?: boolean
 }
 
-export default function BalanceDisplay({ expenses, users, currentUserId, isAdmin = false }: BalanceDisplayProps) {
-  const balances = calculateBalances(expenses)
+export default function BalanceDisplay({ gifts, expenses, users, currentUserId, isAdmin = false }: BalanceDisplayProps) {
+  const balances = calculateBalances(gifts, expenses)
 
   const getUserName = (userId: string) => {
     return users.find((u) => u.id === userId)?.name || 'Unknown'
