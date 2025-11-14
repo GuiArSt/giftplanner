@@ -11,15 +11,19 @@ interface User {
 
 interface Expense {
   id: string
-  recipient_id: string
   amount: number
   description: string
   created_by: string
   created_at: string
   updated_at: string
-  recipient: User
+  gift_id?: string | null
   created_by_user: User
-  contributors: Array<{
+  participants: Array<{
+    user_id: string
+    share_amount: number | null
+    user: User
+  }>
+  payers: Array<{
     user_id: string
     amount_paid: number
     user: User
@@ -35,11 +39,10 @@ interface Gift {
 }
 
 interface ExpenseDetailProps {
-  expense: Expense & { gift_id?: string | null }
+  expense: Expense
   currentUserId: string
   allUsers: User[]
   gifts: Gift[]
-  isRecipient: boolean
 }
 
 export default function ExpenseDetail({
@@ -47,25 +50,64 @@ export default function ExpenseDetail({
   currentUserId,
   allUsers,
   gifts,
-  isRecipient,
 }: ExpenseDetailProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [giftId, setGiftId] = useState(expense.gift_id || '')
   const [description, setDescription] = useState(expense.description)
   const [amount, setAmount] = useState(expense.amount.toString())
-  const [contributorAmounts, setContributorAmounts] = useState<Record<string, string>>(
-    expense.contributors.reduce(
-      (acc, c) => ({ ...acc, [c.user_id]: c.amount_paid.toString() }),
-      {}
-    )
+
+  // Participants state
+  const [participants, setParticipants] = useState<Array<{ userId: string; shareAmount: string }>>(
+    expense.participants.map(p => ({
+      userId: p.user_id,
+      shareAmount: p.share_amount?.toString() || ''
+    }))
   )
+
+  // Payers state
+  const [payers, setPayers] = useState<Array<{ userId: string; amountPaid: string }>>(
+    expense.payers.map(p => ({
+      userId: p.user_id,
+      amountPaid: p.amount_paid.toString()
+    }))
+  )
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
-  // Allow creator OR any contributor to edit
-  const isContributor = expense.contributors.some(c => c.user_id === currentUserId)
-  const canEdit = currentUserId === expense.created_by || isContributor
+  // Allow creator OR any participant/payer to edit
+  const isParticipant = expense.participants.some(p => p.user_id === currentUserId)
+  const isPayer = expense.payers.some(p => p.user_id === currentUserId)
+  const canEdit = currentUserId === expense.created_by || isParticipant || isPayer
+
+  const addParticipant = () => {
+    setParticipants([...participants, { userId: '', shareAmount: '' }])
+  }
+
+  const removeParticipant = (index: number) => {
+    setParticipants(participants.filter((_, i) => i !== index))
+  }
+
+  const updateParticipant = (index: number, field: 'userId' | 'shareAmount', value: string) => {
+    const updated = [...participants]
+    updated[index] = { ...updated[index], [field]: value }
+    setParticipants(updated)
+  }
+
+  const addPayer = () => {
+    setPayers([...payers, { userId: '', amountPaid: '' }])
+  }
+
+  const removePayer = (index: number) => {
+    setPayers(payers.filter((_, i) => i !== index))
+  }
+
+  const updatePayer = (index: number, field: 'userId' | 'amountPaid', value: string) => {
+    const updated = [...payers]
+    updated[index] = { ...updated[index], [field]: value }
+    setPayers(updated)
+  }
 
   const handleSave = async () => {
     setIsSubmitting(true)
@@ -76,8 +118,24 @@ export default function ExpenseDetail({
         return
       }
 
-      if (!giftId) {
-        alert('Please select which gift this expense is for')
+      // Validate participants
+      const validParticipants = participants.filter(p => p.userId)
+      if (validParticipants.length === 0) {
+        alert('Please add at least one participant')
+        return
+      }
+
+      // Validate payers
+      const validPayers = payers.filter(p => p.userId && p.amountPaid)
+      if (validPayers.length === 0) {
+        alert('Please add at least one payer')
+        return
+      }
+
+      // Check total paid matches amount
+      const totalPaid = validPayers.reduce((sum, p) => sum + parseFloat(p.amountPaid), 0)
+      if (Math.abs(totalPaid - amountNum) > 0.01) {
+        alert(`Total paid (€${totalPaid.toFixed(2)}) must equal expense amount (€${amountNum.toFixed(2)})`)
         return
       }
 
@@ -85,7 +143,7 @@ export default function ExpenseDetail({
       const { error: expenseError } = await supabase
         .from('expenses')
         .update({
-          gift_id: giftId,
+          gift_id: giftId || null,
           description,
           amount: amountNum,
         })
@@ -93,30 +151,47 @@ export default function ExpenseDetail({
 
       if (expenseError) throw expenseError
 
-      // Delete old contributors
-      const { error: deleteError } = await supabase
-        .from('expense_contributors')
+      // Delete old participants
+      const { error: deleteParticipantsError } = await supabase
+        .from('expense_participants')
         .delete()
         .eq('expense_id', expense.id)
 
-      if (deleteError) throw deleteError
+      if (deleteParticipantsError) throw deleteParticipantsError
 
-      // Add new contributors
-      const contributors = Object.entries(contributorAmounts)
-        .filter(([, amt]) => parseFloat(amt) > 0)
-        .map(([user_id, amt]) => ({
-          expense_id: expense.id,
-          user_id,
-          amount_paid: parseFloat(amt),
-        }))
+      // Delete old payers
+      const { error: deletePayersError } = await supabase
+        .from('expense_payers')
+        .delete()
+        .eq('expense_id', expense.id)
 
-      if (contributors.length > 0) {
-        const { error: contributorsError } = await supabase
-          .from('expense_contributors')
-          .insert(contributors)
+      if (deletePayersError) throw deletePayersError
 
-        if (contributorsError) throw contributorsError
-      }
+      // Add new participants
+      const participantInserts = validParticipants.map((p) => ({
+        expense_id: expense.id,
+        user_id: p.userId,
+        share_amount: p.shareAmount ? parseFloat(p.shareAmount) : null,
+      }))
+
+      const { error: participantsError } = await supabase
+        .from('expense_participants')
+        .insert(participantInserts)
+
+      if (participantsError) throw participantsError
+
+      // Add new payers
+      const payerInserts = validPayers.map((p) => ({
+        expense_id: expense.id,
+        user_id: p.userId,
+        amount_paid: parseFloat(p.amountPaid),
+      }))
+
+      const { error: payersError } = await supabase
+        .from('expense_payers')
+        .insert(payerInserts)
+
+      if (payersError) throw payersError
 
       setIsEditing(false)
       router.refresh()
@@ -132,11 +207,17 @@ export default function ExpenseDetail({
     setGiftId(expense.gift_id || '')
     setDescription(expense.description)
     setAmount(expense.amount.toString())
-    setContributorAmounts(
-      expense.contributors.reduce(
-        (acc, c) => ({ ...acc, [c.user_id]: c.amount_paid.toString() }),
-        {}
-      )
+    setParticipants(
+      expense.participants.map(p => ({
+        userId: p.user_id,
+        shareAmount: p.share_amount?.toString() || ''
+      }))
+    )
+    setPayers(
+      expense.payers.map(p => ({
+        userId: p.user_id,
+        amountPaid: p.amount_paid.toString()
+      }))
     )
     setIsEditing(false)
   }
@@ -154,7 +235,6 @@ export default function ExpenseDetail({
 
       if (error) throw error
 
-      // Redirect to expenses page
       router.push('/dashboard/expenses')
       router.refresh()
     } catch (error) {
@@ -164,26 +244,23 @@ export default function ExpenseDetail({
     }
   }
 
-  const totalPaid = expense.contributors.reduce((sum, c) => sum + c.amount_paid, 0)
+  // Calculate equal split amount
+  const customShares = expense.participants
+    .filter(p => p.share_amount !== null)
+    .reduce((sum, p) => sum + (p.share_amount || 0), 0)
+  const equalSplitCount = expense.participants.filter(p => p.share_amount === null).length
+  const equalSplitAmount = equalSplitCount > 0
+    ? (expense.amount - customShares) / equalSplitCount
+    : 0
+
+  const totalPaid = expense.payers.reduce((sum, p) => sum + p.amount_paid, 0)
 
   return (
     <div className="max-w-4xl rounded-lg bg-white p-8 shadow-sm">
       <div className="mb-6 flex items-start justify-between">
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-gray-900">{expense.description}</h1>
-          <p className="mt-2 text-gray-600">
-            Gift for: <span className="font-semibold">{expense.recipient.name}</span>
-          </p>
-          {!isRecipient && (
-            <p className="mt-4 text-4xl font-bold text-blue-600">€{expense.amount.toFixed(2)}</p>
-          )}
-          {isRecipient && (
-            <div className="mt-4 rounded-md bg-yellow-50 p-3">
-              <p className="text-sm text-yellow-800">
-                Amount is hidden because this gift is for you!
-              </p>
-            </div>
-          )}
+          <p className="mt-4 text-4xl font-bold text-blue-600">€{expense.amount.toFixed(2)}</p>
         </div>
         {canEdit && !isEditing && (
           <div className="flex gap-2">
@@ -206,30 +283,6 @@ export default function ExpenseDetail({
 
       {isEditing ? (
         <div className="space-y-6">
-          {/* Gift Selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Which Gift is this expense for?
-            </label>
-            <select
-              value={giftId}
-              onChange={(e) => setGiftId(e.target.value)}
-              required
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            >
-              <option value="">Select a gift...</option>
-              {gifts.map((gift) => (
-                <option key={gift.id} value={gift.id}>
-                  {gift.description || `Gift for ${gift.recipient.name}`} - €{gift.amount.toFixed(2)}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-gray-500">
-              Link this expense to a specific gift for proper balance tracking
-            </p>
-          </div>
-
-          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Description</label>
             <input
@@ -237,56 +290,143 @@ export default function ExpenseDetail({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              placeholder="e.g., Birthday cake, Movie tickets..."
+              placeholder="e.g., Dinner at restaurant"
             />
           </div>
 
-          {/* Amount */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Total Amount (€)</label>
             <input
               type="number"
               step="0.01"
-              min="0"
+              min="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
             />
           </div>
 
-          {/* Contributors */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Contributors & Amounts Paid
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Link to Gift (Optional)</label>
+            <select
+              value={giftId}
+              onChange={(e) => setGiftId(e.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            >
+              <option value="">No gift (just track the expense)</option>
+              {gifts.map((gift) => (
+                <option key={gift.id} value={gift.id}>
+                  {gift.description || `Gift for ${gift.recipient.name}`} - €{gift.amount.toFixed(2)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                Participants (who benefits/shares the cost)
+              </label>
+              <button
+                type="button"
+                onClick={addParticipant}
+                className="text-sm text-blue-600 hover:text-blue-500"
+              >
+                + Add Participant
+              </button>
+            </div>
             <div className="mt-2 space-y-3">
-              {allUsers
-                .filter((u) => u.id !== expense.recipient_id)
-                .map((user) => (
-                  <div key={user.id} className="flex items-center gap-3">
-                    <span className="w-40 text-sm text-gray-700">{user.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-600">€</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={contributorAmounts[user.id] || '0'}
-                        onChange={(e) =>
-                          setContributorAmounts({
-                            ...contributorAmounts,
-                            [user.id]: e.target.value,
-                          })
-                        }
-                        className="w-32 rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                ))}
+              {participants.map((participant, index) => (
+                <div key={index} className="flex gap-3">
+                  <select
+                    value={participant.userId}
+                    onChange={(e) => updateParticipant(index, 'userId', e.target.value)}
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-2"
+                  >
+                    <option value="">Select person...</option>
+                    {allUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={participant.shareAmount}
+                    onChange={(e) => updateParticipant(index, 'shareAmount', e.target.value)}
+                    placeholder="Share (empty = equal)"
+                    className="w-40 rounded-md border border-gray-300 px-3 py-2"
+                  />
+                  {participants.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeParticipant(index)}
+                      className="rounded-md bg-red-100 px-3 py-2 text-red-700 hover:bg-red-200"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Actions */}
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                Payers (who actually paid)
+              </label>
+              <button
+                type="button"
+                onClick={addPayer}
+                className="text-sm text-blue-600 hover:text-blue-500"
+              >
+                + Add Payer
+              </button>
+            </div>
+            <div className="mt-2 space-y-3">
+              {payers.map((payer, index) => (
+                <div key={index} className="flex gap-3">
+                  <select
+                    value={payer.userId}
+                    onChange={(e) => updatePayer(index, 'userId', e.target.value)}
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-2"
+                  >
+                    <option value="">Select person...</option>
+                    {allUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={payer.amountPaid}
+                    onChange={(e) => updatePayer(index, 'amountPaid', e.target.value)}
+                    placeholder="Amount paid"
+                    className="w-32 rounded-md border border-gray-300 px-3 py-2"
+                  />
+                  {payers.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removePayer(index)}
+                      className="rounded-md bg-red-100 px-3 py-2 text-red-700 hover:bg-red-200"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              Total paid: €{payers.reduce((sum, p) => sum + (parseFloat(p.amountPaid) || 0), 0).toFixed(2)}
+            </p>
+          </div>
+
           <div className="flex gap-3">
             <button
               onClick={handleSave}
@@ -306,43 +446,69 @@ export default function ExpenseDetail({
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Contributors */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Contributors</h3>
-            <div className="mt-3 space-y-2">
-              {expense.contributors.map((c) => (
-                <div
-                  key={c.user_id}
-                  className="flex items-center justify-between rounded-md bg-gray-50 p-3"
-                >
-                  <span className="text-gray-900">{c.user.name}</span>
-                  <span className="font-semibold text-blue-600">
-                    €{c.amount_paid.toFixed(2)}
-                  </span>
-                </div>
-              ))}
+          {expense.gift_id && (
+            <div className="rounded-md bg-blue-50 p-3">
+              <p className="text-sm text-blue-900">
+                🎁 Linked to: {gifts.find(g => g.id === expense.gift_id)?.description || 'Gift'}
+              </p>
             </div>
-            <div className="mt-3 flex justify-between border-t pt-3">
-              <span className="font-semibold text-gray-900">Total Paid:</span>
-              <span className="font-bold text-blue-600">€{totalPaid.toFixed(2)}</span>
-            </div>
-            {!isRecipient && totalPaid !== expense.amount && (
-              <div className="mt-2 rounded-md bg-yellow-50 p-3">
-                <p className="text-sm text-yellow-800">
-                  ⚠️ Total paid (€{totalPaid.toFixed(2)}) doesn't match expense amount (€
-                  {expense.amount.toFixed(2)})
-                </p>
+          )}
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Participants</h3>
+              <p className="text-xs text-gray-500 mb-3">Who benefits / shares the cost</p>
+              <div className="space-y-2">
+                {expense.participants.map((p) => (
+                  <div
+                    key={p.user_id}
+                    className="flex items-center justify-between rounded-md bg-gray-50 p-3"
+                  >
+                    <span className="text-gray-900">{p.user.name}</span>
+                    <span className="font-semibold text-blue-600">
+                      €{(p.share_amount !== null ? p.share_amount : equalSplitAmount).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Payers</h3>
+              <p className="text-xs text-gray-500 mb-3">Who actually paid</p>
+              <div className="space-y-2">
+                {expense.payers.map((p) => (
+                  <div
+                    key={p.user_id}
+                    className="flex items-center justify-between rounded-md bg-green-50 p-3"
+                  >
+                    <span className="text-gray-900">{p.user.name}</span>
+                    <span className="font-semibold text-green-600">
+                      €{p.amount_paid.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex justify-between border-t pt-3">
+                <span className="font-semibold text-gray-900">Total Paid:</span>
+                <span className="font-bold text-green-600">€{totalPaid.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
 
-          {/* Details */}
+          {totalPaid !== expense.amount && (
+            <div className="rounded-md bg-yellow-50 p-3">
+              <p className="text-sm text-yellow-800">
+                ⚠️ Total paid (€{totalPaid.toFixed(2)}) doesn't match expense amount (€{expense.amount.toFixed(2)})
+              </p>
+            </div>
+          )}
+
           <div className="border-t pt-6">
             <h3 className="text-sm font-medium text-gray-500">Created By</h3>
             <p className="mt-1 text-lg text-gray-900">{expense.created_by_user.name}</p>
           </div>
 
-          {/* Timestamps */}
           <div className="border-t pt-4 text-sm text-gray-500">
             <p>Created: {new Date(expense.created_at).toLocaleString()}</p>
             <p>Last updated: {new Date(expense.updated_at).toLocaleString()}</p>

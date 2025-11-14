@@ -14,18 +14,14 @@ export default async function ExpenseDetailPage(props: { params: Promise<{ id: s
     redirect('/login')
   }
 
-  // Get expense data with participants and payers
+  // Get expense data with all relationships
   const { data: expense } = await supabase
     .from('expenses')
     .select(`
       *,
+      recipient:users!expenses_recipient_id_fkey(id, name),
       created_by_user:users!expenses_created_by_fkey(id, name),
-      participants:expense_participants(
-        user_id,
-        share_amount,
-        user:users(id, name)
-      ),
-      payers:expense_payers(
+      contributors:expense_contributors(
         user_id,
         amount_paid,
         user:users(id, name)
@@ -38,17 +34,16 @@ export default async function ExpenseDetailPage(props: { params: Promise<{ id: s
     notFound()
   }
 
-  // Check if user is involved in this expense (privacy)
-  const isParticipant = expense.participants.some((p: any) => p.user_id === user.id)
-  const isPayer = expense.payers.some((p: any) => p.user_id === user.id)
-  const isCreator = expense.created_by === user.id
+  // Check if user is recipient (for privacy)
+  const isRecipient = expense.recipient_id === user.id
 
-  if (!isParticipant && !isPayer && !isCreator) {
+  // Recipients shouldn't see their gift expenses
+  if (isRecipient) {
     return (
       <div className="max-w-4xl rounded-lg bg-yellow-50 p-8">
         <h1 className="text-2xl font-bold text-yellow-900">Access Restricted</h1>
         <p className="mt-4 text-yellow-800">
-          You don't have permission to view this expense. Only participants and payers can see expense details.
+          This expense is for a gift to you! We're keeping the details a surprise. 🎁
         </p>
         <Link
           href="/dashboard/expenses"
@@ -60,13 +55,14 @@ export default async function ExpenseDetailPage(props: { params: Promise<{ id: s
     )
   }
 
-  // Get all users for editing
+  // Get all users for editing (excluding recipient for privacy)
   const { data: users } = await supabase
     .from('users')
     .select('id, name')
+    .neq('id', expense.recipient_id)
     .order('name')
 
-  // Get all gifts (for optional linking)
+  // Get all gifts where user is a contributor (for linking expense to gift)
   const { data: giftsData } = await supabase
     .from('gifts')
     .select(`
@@ -76,6 +72,7 @@ export default async function ExpenseDetailPage(props: { params: Promise<{ id: s
       recipient_id,
       recipient:users!gifts_recipient_id_fkey(id, name)
     `)
+    .neq('recipient_id', user.id)
     .order('created_at', { ascending: false })
 
   // Transform to match Gift interface
@@ -99,6 +96,7 @@ export default async function ExpenseDetailPage(props: { params: Promise<{ id: s
         currentUserId={user.id}
         allUsers={users || []}
         gifts={gifts}
+        isRecipient={isRecipient}
       />
     </div>
   )
