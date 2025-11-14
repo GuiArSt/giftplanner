@@ -3,7 +3,8 @@ import { redirect, notFound } from 'next/navigation'
 import GiftDetail from '@/components/gifts/GiftDetail'
 import Link from 'next/link'
 
-export default async function GiftDetailPage({ params }: { params: { id: string } }) {
+export default async function GiftDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const supabase = await createClient()
   const {
     data: { user },
