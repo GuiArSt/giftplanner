@@ -15,6 +15,13 @@ export default async function ExpensesPage() {
     redirect('/login')
   }
 
+  // Get current user's role
+  const { data: currentUser } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
   // Get all users
   const { data: users } = await supabase.from('users').select('id, name').order('name')
 
@@ -71,6 +78,7 @@ export default async function ExpensesPage() {
             expenses={expensesForBalance}
             users={users || []}
             currentUserId={user.id}
+            isAdmin={currentUser?.role === 'admin'}
           />
         </div>
       </div>

@@ -6,9 +6,10 @@ interface BalanceDisplayProps {
   expenses: Expense[]
   users: Array<{ id: string; name: string }>
   currentUserId: string
+  isAdmin?: boolean
 }
 
-export default function BalanceDisplay({ expenses, users, currentUserId }: BalanceDisplayProps) {
+export default function BalanceDisplay({ expenses, users, currentUserId, isAdmin = false }: BalanceDisplayProps) {
   const balances = calculateBalances(expenses)
 
   const getUserName = (userId: string) => {
@@ -59,9 +60,9 @@ export default function BalanceDisplay({ expenses, users, currentUserId }: Balan
         )}
       </div>
 
-      {balances.length > userBalances.length && (
+      {isAdmin && balances.length > userBalances.length && (
         <div className="mt-6 border-t pt-4">
-          <h3 className="text-sm font-medium text-gray-700">All Family Balances</h3>
+          <h3 className="text-sm font-medium text-gray-700">All Family Balances (Admin View)</h3>
           <div className="mt-2 space-y-2">
             {balances.map((balance, index) => (
               <div key={index} className="flex justify-between text-sm text-gray-600">
