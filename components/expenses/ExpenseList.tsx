@@ -7,7 +7,7 @@ import Link from 'next/link'
 interface Expense {
   id: string
   recipient_id: string
-  amount: number | null // null if user is recipient (privacy)
+  amount: number
   description: string
   created_at: string
   recipient: { name: string }
@@ -59,15 +59,11 @@ export default function ExpenseList({ initialExpenses, currentUserId }: ExpenseL
           user:users(name)
         )
       `)
+      .neq('recipient_id', currentUserId) // Hide gifts TO current user (privacy)
       .order('created_at', { ascending: false })
 
     if (data) {
-      // Apply privacy filter: hide amount if user is recipient
-      const filtered = data.map((expense) => ({
-        ...expense,
-        amount: expense.recipient_id === currentUserId ? null : expense.amount,
-      }))
-      setExpenses(filtered as Expense[])
+      setExpenses(data as Expense[])
     }
   }
 
@@ -85,7 +81,11 @@ export default function ExpenseList({ initialExpenses, currentUserId }: ExpenseL
         </div>
       ) : (
         expenses.map((expense) => (
-          <div key={expense.id} className="rounded-lg bg-white p-6 shadow-sm">
+          <Link
+            key={expense.id}
+            href={`/dashboard/expenses/${expense.id}`}
+            className="block rounded-lg bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
+          >
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-gray-900">{expense.description}</h3>
@@ -98,11 +98,7 @@ export default function ExpenseList({ initialExpenses, currentUserId }: ExpenseL
                 </p>
               </div>
               <div className="text-right">
-                {expense.amount !== null ? (
-                  <p className="text-2xl font-bold text-blue-600">€{expense.amount.toFixed(2)}</p>
-                ) : (
-                  <p className="text-lg font-medium text-gray-400">Hidden</p>
-                )}
+                <p className="text-2xl font-bold text-blue-600">€{expense.amount.toFixed(2)}</p>
               </div>
             </div>
             <div className="mt-4 border-t pt-4">
@@ -118,7 +114,7 @@ export default function ExpenseList({ initialExpenses, currentUserId }: ExpenseL
                 ))}
               </div>
             </div>
-          </div>
+          </Link>
         ))
       )}
     </div>

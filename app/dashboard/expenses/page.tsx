@@ -19,7 +19,7 @@ export default async function ExpensesPage() {
   const { data: users } = await supabase.from('users').select('id, name').order('name')
 
   // Get expenses with privacy filtering
-  // We'll fetch all expenses and filter in the component
+  // Completely hide expenses where user is the recipient (privacy)
   const { data: expensesData } = await supabase
     .from('expenses')
     .select(`
@@ -32,13 +32,10 @@ export default async function ExpensesPage() {
         user:users(id, name)
       )
     `)
+    .neq('recipient_id', user.id) // Hide gifts TO the current user
     .order('created_at', { ascending: false })
 
-  // Apply privacy filter: hide amount if user is recipient
-  const expenses = expensesData?.map((expense) => ({
-    ...expense,
-    amount: expense.recipient_id === user.id ? null : expense.amount,
-  })) || []
+  const expenses = expensesData || []
 
   // Prepare expenses for balance calculation
   const expensesForBalance: Expense[] =
