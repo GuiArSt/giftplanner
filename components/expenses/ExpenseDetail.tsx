@@ -52,7 +52,9 @@ export default function ExpenseDetail({
   const supabase = createClient()
   const router = useRouter()
 
-  const canEdit = currentUserId === expense.created_by
+  // Allow creator OR any contributor to edit
+  const isContributor = expense.contributors.some(c => c.user_id === currentUserId)
+  const canEdit = currentUserId === expense.created_by || isContributor
 
   const handleSave = async () => {
     setIsSubmitting(true)

@@ -48,7 +48,9 @@ export default function GiftDetail({ gift, currentUserId, allUsers }: GiftDetail
   const supabase = createClient()
   const router = useRouter()
 
-  const canEdit = currentUserId === gift.created_by || currentUserId === gift.organizer_id
+  // Allow creator, organizer, OR any contributor to edit
+  const isContributor = gift.contributors.some(c => c.user_id === currentUserId)
+  const canEdit = currentUserId === gift.created_by || currentUserId === gift.organizer_id || isContributor
 
   const handleSave = async () => {
     setIsSubmitting(true)
