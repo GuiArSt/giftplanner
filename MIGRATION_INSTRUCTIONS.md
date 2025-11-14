@@ -40,6 +40,18 @@ The app has been refactored to use a Tricount-style expense model. You **MUST** 
    - Paste into the Supabase SQL Editor
    - Click **Run**
 
+8. **Apply Migration 6:** Add Child Table Policies
+   - Open: `supabase/migrations/20251114260000_add_child_table_policies.sql`
+   - Copy the entire contents
+   - Paste into the Supabase SQL Editor
+   - Click **Run**
+
+9. **Apply Migration 7:** Fix Expenses SELECT Policy
+   - Open: `supabase/migrations/20251114270000_fix_expenses_select_policy.sql`
+   - Copy the entire contents
+   - Paste into the Supabase SQL Editor
+   - Click **Run**
+
 ### What the Migrations Do:
 
 **Migration 1 (Tricount Model):**
@@ -73,6 +85,22 @@ The app has been refactored to use a Tricount-style expense model. You **MUST** 
 - Gifts: creator, organizer, contributors, or admins can update
 - Previously only creators could update expenses
 
+**Migration 6 (Add Child Table Policies):**
+- **Adds** complete CRUD policies for expense_participants and expense_payers
+- **Uses SECURITY DEFINER function** to check expense creator without triggering recursion
+- Helper function `user_created_expense()` bypasses RLS to break circular dependencies
+- Allows SELECT, INSERT, UPDATE, DELETE on child tables when user is involved
+- Previously only had SELECT and INSERT, blocking expense edits
+- This migration is CRITICAL for editing expenses to work
+
+**Migration 7 (Fix Expenses SELECT Policy):**
+- **Fixes** main expenses table SELECT policy with SECURITY DEFINER function
+- **Eliminates infinite recursion** when checking participants/payers tables
+- Helper function `user_is_involved_in_expense()` bypasses RLS to break circular dependencies
+- Checks creator FIRST (before helper) so INSERT works before child records exist
+- New policy checks: admin role, creator (direct), OR involved (via helper function)
+- This migration is CRITICAL for viewing existing expenses AND creating new ones
+
 ### After Migrations:
 
 Your app will work with the new Tricount-style model:
@@ -86,11 +114,15 @@ Your app will work with the new Tricount-style model:
 Common errors and solutions:
 - **"table expense_participants does not exist"** → Apply Migration 1
 - **"null value in column recipient_id violates not-null constraint"** → Apply Migration 2
-- **"infinite recursion detected in policy"** → Apply Migration 3
+- **"infinite recursion detected in policy" for any table** → Apply UPDATED Migrations 6 AND 7
 - **"new row violates row-level security policy" when deleting** → Apply Migration 4
-- **"new row violates row-level security policy" when editing** → Apply Migration 5
+- **"new row violates row-level security policy" when editing expenses** → Apply Migration 5
+- **"new row violates row-level security policy" when creating expenses** → Apply UPDATED Migration 7
+- **Cannot edit expenses / "permission denied" on participants/payers** → Apply UPDATED Migration 6
+- **Cannot create new expenses** → Apply UPDATED Migrations 6 AND 7
+- **Existing expenses are hidden / can't see old expenses** → Apply UPDATED Migration 7
 
-All five migrations must be applied **IN ORDER** for the app to work.
+All seven migrations must be applied **IN ORDER** for the app to work.
 
 ### Testing After Migrations:
 
@@ -103,3 +135,19 @@ All five migrations must be applied **IN ORDER** for the app to work.
 ---
 
 **Note:** This is a breaking change. All existing expenses will have their payers copied to participants with equal split. The old recipient-based model is replaced with the participant/payer model.
+
+---
+
+## Important: If You Already Applied Migrations 1-7
+
+If you already applied the original versions of migrations 6 and 7 and are still getting errors:
+
+1. **Drop and re-apply Migration 6** - The updated version uses SECURITY DEFINER functions
+2. **Drop and re-apply Migration 7** - The updated version uses SECURITY DEFINER functions and checks creator first
+
+The root problem was **infinite recursion caused by circular RLS policy dependencies**:
+- `expenses` table SELECT policy checked `expense_participants` and `expense_payers` tables
+- Those child table policies checked the `expenses` table
+- This created an infinite loop
+
+The solution is **SECURITY DEFINER functions** that bypass RLS and break the recursion chain.

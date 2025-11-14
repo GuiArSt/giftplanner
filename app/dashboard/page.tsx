@@ -69,52 +69,96 @@ export default async function DashboardPage() {
       }).length || 0)
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-gray-900">
-        Welcome back, {profile?.name}!
-      </h1>
-      <p className="mt-2 text-gray-600">
-        Manage your family's gift planning and expenses
-      </p>
+    <div className="relative">
+      {/* Decorative floating elements */}
+      <div className="absolute top-0 right-0 w-32 h-32 text-6xl animate-float opacity-20 pointer-events-none">
+        🎁
+      </div>
+      <div className="absolute top-20 left-10 w-24 h-24 text-5xl animate-float opacity-10 pointer-events-none" style={{ animationDelay: '1s' }}>
+        🎉
+      </div>
+      <div className="absolute bottom-0 right-20 w-28 h-28 text-5xl animate-float opacity-15 pointer-events-none" style={{ animationDelay: '2s' }}>
+        🎈
+      </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Hero section */}
+      <div className="relative mb-12 overflow-hidden rounded-3xl glass p-8 shadow-xl">
+        <div className="relative z-10">
+          <h1 className="text-5xl font-bold gradient-text mb-3">
+            Welcome back, {profile?.name}! 🎊
+          </h1>
+          <p className="text-xl text-gray-700 font-medium">
+            Manage your family's gift planning and expenses with style
+          </p>
+        </div>
+        {/* Decorative corner elements */}
+        <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-pink-200 to-purple-200 rounded-full blur-3xl opacity-30 -mr-20 -mt-20"></div>
+        <div className="absolute bottom-0 left-0 w-40 h-40 bg-gradient-to-tr from-yellow-200 to-teal-200 rounded-full blur-3xl opacity-30 -ml-20 -mb-20"></div>
+      </div>
+
+      {/* Stats cards */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-8">
         <Link
           href="/dashboard/expenses"
-          className="rounded-lg bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
+          className="group relative overflow-hidden rounded-2xl glass p-8 card-hover"
         >
-          <h3 className="text-lg font-semibold text-gray-900">Expenses</h3>
-          <p className="mt-2 text-3xl font-bold text-blue-600">{expensesCount}</p>
-          <p className="mt-1 text-sm text-gray-500">
-            {isAdmin ? 'Total expenses' : 'Expenses you're involved in'}
-          </p>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity -mr-16 -mt-16"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Expenses</h3>
+              <span className="text-4xl animate-sparkle">💳</span>
+            </div>
+            <p className="text-5xl font-black bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-2">
+              {expensesCount}
+            </p>
+            <p className="text-sm text-gray-600 font-medium">
+              {isAdmin ? 'Total expenses' : 'Expenses you're involved in'}
+            </p>
+          </div>
         </Link>
 
         <Link
           href="/dashboard/gifts"
-          className="rounded-lg bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
+          className="group relative overflow-hidden rounded-2xl glass p-8 card-hover"
         >
-          <h3 className="text-lg font-semibold text-gray-900">Pending Gifts</h3>
-          <p className="mt-2 text-3xl font-bold text-orange-600">{pendingGiftsCount}</p>
-          <p className="mt-1 text-sm text-gray-500">
-            {isAdmin ? 'All pending gifts' : 'Your pending gifts'}
-          </p>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-pink-400 to-rose-400 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity -mr-16 -mt-16"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Pending Gifts</h3>
+              <span className="text-4xl animate-sparkle" style={{ animationDelay: '0.5s' }}>🎁</span>
+            </div>
+            <p className="text-5xl font-black bg-gradient-to-r from-pink-600 to-rose-600 bg-clip-text text-transparent mb-2">
+              {pendingGiftsCount}
+            </p>
+            <p className="text-sm text-gray-600 font-medium">
+              {isAdmin ? 'All pending gifts' : 'Your pending gifts'}
+            </p>
+          </div>
         </Link>
 
-        <div className="rounded-lg bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-          <div className="mt-4 space-y-2">
-            <Link
-              href="/dashboard/expenses/new"
-              className="block rounded-md bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Add Expense
-            </Link>
-            <Link
-              href="/dashboard/gifts/new"
-              className="block rounded-md bg-orange-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-orange-700"
-            >
-              Create Gift
-            </Link>
+        <div className="group relative overflow-hidden rounded-2xl glass p-8">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-400 to-indigo-400 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity -mr-16 -mt-16"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Quick Actions</h3>
+              <span className="text-4xl animate-sparkle" style={{ animationDelay: '1s' }}>⚡</span>
+            </div>
+            <div className="space-y-3">
+              <Link
+                href="/dashboard/expenses/new"
+                className="flex items-center justify-center gap-2 rounded-xl btn-primary px-6 py-3 text-sm font-bold text-white shadow-lg"
+              >
+                <span>💸</span>
+                Add Expense
+              </Link>
+              <Link
+                href="/dashboard/gifts/new"
+                className="flex items-center justify-center gap-2 rounded-xl btn-secondary px-6 py-3 text-sm font-bold text-white shadow-lg"
+              >
+                <span>🎀</span>
+                Create Gift
+              </Link>
+            </div>
           </div>
         </div>
       </div>
