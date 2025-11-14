@@ -9,17 +9,27 @@ interface User {
   name: string
 }
 
+interface Gift {
+  id: string
+  description: string | null
+  amount: number
+  recipient: { id: string; name: string }
+  recipient_id?: string
+}
+
 interface ExpenseFormProps {
   users: User[]
+  gifts: Gift[]
   currentUserId: string
 }
 
-export default function ExpenseForm({ users, currentUserId }: ExpenseFormProps) {
+export default function ExpenseForm({ users, gifts, currentUserId }: ExpenseFormProps) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [giftId, setGiftId] = useState('')
   const [recipientId, setRecipientId] = useState('')
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
@@ -56,6 +66,10 @@ export default function ExpenseForm({ users, currentUserId }: ExpenseFormProps) 
         throw new Error('Please select a recipient')
       }
 
+      if (!giftId) {
+        throw new Error('Please select which gift this expense is for')
+      }
+
       // Calculate total paid
       const totalPaid = contributors.reduce((sum, c) => {
         const paid = parseFloat(c.amountPaid) || 0
@@ -70,6 +84,7 @@ export default function ExpenseForm({ users, currentUserId }: ExpenseFormProps) 
       const { data: expense, error: expenseError } = await supabase
         .from('expenses')
         .insert({
+          gift_id: giftId,
           recipient_id: recipientId,
           amount: totalAmount,
           description,
@@ -115,6 +130,36 @@ export default function ExpenseForm({ users, currentUserId }: ExpenseFormProps) 
       )}
 
       <div>
+        <label htmlFor="gift" className="block text-sm font-medium text-gray-700">
+          Which Gift is this expense for?
+        </label>
+        <select
+          id="gift"
+          value={giftId}
+          onChange={(e) => {
+            const selectedGift = gifts.find(g => g.id === e.target.value)
+            setGiftId(e.target.value)
+            if (selectedGift) {
+              // Auto-populate recipient from gift
+              setRecipientId(selectedGift.recipient_id || selectedGift.recipient.id)
+            }
+          }}
+          required
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+        >
+          <option value="">Select a gift...</option>
+          {gifts.map((gift) => (
+            <option key={gift.id} value={gift.id}>
+              {gift.description || `Gift for ${gift.recipient.name}`} - €{gift.amount.toFixed(2)}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-gray-500">
+          Expenses must be linked to a specific gift to track contributions properly
+        </p>
+      </div>
+
+      <div>
         <label htmlFor="recipient" className="block text-sm font-medium text-gray-700">
           Gift Recipient
         </label>
@@ -123,15 +168,19 @@ export default function ExpenseForm({ users, currentUserId }: ExpenseFormProps) 
           value={recipientId}
           onChange={(e) => setRecipientId(e.target.value)}
           required
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          disabled
+          className="mt-1 block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 shadow-sm"
         >
-          <option value="">Select recipient...</option>
+          <option value="">Select gift first...</option>
           {users.map((user) => (
             <option key={user.id} value={user.id}>
               {user.name}
             </option>
           ))}
         </select>
+        <p className="mt-1 text-xs text-gray-500">
+          Recipient is automatically set based on the gift selected
+        </p>
       </div>
 
       <div>
