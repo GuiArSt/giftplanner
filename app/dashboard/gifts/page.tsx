@@ -13,7 +13,7 @@ export default async function GiftsPage() {
     redirect('/login')
   }
 
-  // Get all gifts
+  // Get all gifts (hide gifts where user is the recipient - privacy)
   const { data: gifts } = await supabase
     .from('gifts')
     .select(`
@@ -25,6 +25,7 @@ export default async function GiftsPage() {
         user:users(name)
       )
     `)
+    .neq('recipient_id', user.id) // Hide gifts TO the current user (privacy)
     .order('created_at', { ascending: false })
 
   return (
@@ -39,7 +40,7 @@ export default async function GiftsPage() {
         </Link>
       </div>
 
-      <GiftBoard initialGifts={gifts || []} />
+      <GiftBoard initialGifts={gifts || []} currentUserId={user.id} />
     </div>
   )
 }

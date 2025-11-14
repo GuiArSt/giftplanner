@@ -17,6 +17,7 @@ interface Gift {
 
 interface GiftBoardProps {
   initialGifts: Gift[]
+  currentUserId: string
 }
 
 const statusColors = {
@@ -25,7 +26,7 @@ const statusColors = {
   done: 'bg-green-100 text-green-800',
 }
 
-export default function GiftBoard({ initialGifts }: GiftBoardProps) {
+export default function GiftBoard({ initialGifts, currentUserId }: GiftBoardProps) {
   const [gifts, setGifts] = useState(initialGifts)
   const supabase = createClient()
 
@@ -62,6 +63,7 @@ export default function GiftBoard({ initialGifts }: GiftBoardProps) {
           user:users(name)
         )
       `)
+      .neq('recipient_id', currentUserId) // Hide gifts TO current user (privacy)
       .order('created_at', { ascending: false })
 
     if (data) {
