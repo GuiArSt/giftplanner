@@ -28,6 +28,18 @@ The app has been refactored to use a Tricount-style expense model. You **MUST** 
    - Paste into the Supabase SQL Editor
    - Click **Run**
 
+6. **Apply Migration 4:** Add Delete Policies
+   - Open: `supabase/migrations/20251114240000_add_delete_policies.sql`
+   - Copy the entire contents
+   - Paste into the Supabase SQL Editor
+   - Click **Run**
+
+7. **Apply Migration 5:** Fix Update Policies
+   - Open: `supabase/migrations/20251114250000_fix_update_policies.sql`
+   - Copy the entire contents
+   - Paste into the Supabase SQL Editor
+   - Click **Run**
+
 ### What the Migrations Do:
 
 **Migration 1 (Tricount Model):**
@@ -49,6 +61,18 @@ The app has been refactored to use a Tricount-style expense model. You **MUST** 
 - Removes recursive policy checks that caused errors
 - Simplifies policies: users can see/edit if they created the expense or are a payer
 
+**Migration 4 (Add Delete Policies):**
+- **Adds** DELETE policies for expenses and gifts
+- Allows creators to delete their own expenses
+- Allows creators, organizers, or admins to delete gifts
+- Previously no DELETE policies existed, blocking all delete operations
+
+**Migration 5 (Fix Update Policies):**
+- **Updates** UPDATE policies to allow all involved users to edit
+- Expenses: participants, payers, or creators can update
+- Gifts: creator, organizer, contributors, or admins can update
+- Previously only creators could update expenses
+
 ### After Migrations:
 
 Your app will work with the new Tricount-style model:
@@ -63,8 +87,10 @@ Common errors and solutions:
 - **"table expense_participants does not exist"** → Apply Migration 1
 - **"null value in column recipient_id violates not-null constraint"** → Apply Migration 2
 - **"infinite recursion detected in policy"** → Apply Migration 3
+- **"new row violates row-level security policy" when deleting** → Apply Migration 4
+- **"new row violates row-level security policy" when editing** → Apply Migration 5
 
-All three migrations must be applied **IN ORDER** for the app to work.
+All five migrations must be applied **IN ORDER** for the app to work.
 
 ### Testing After Migrations:
 
