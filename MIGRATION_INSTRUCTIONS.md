@@ -4,7 +4,7 @@
 
 The app has been refactored to use a Tricount-style expense model. You **MUST** apply these database migrations before the app will work correctly.
 
-### Steps to Apply Migrations:
+### Steps to Apply Migrations (IN ORDER):
 
 1. Go to your Supabase project dashboard: https://supabase.com/dashboard/project/YOUR_PROJECT_ID
 
@@ -18,6 +18,12 @@ The app has been refactored to use a Tricount-style expense model. You **MUST** 
 
 4. **Apply Migration 2:** Make Recipient Optional
    - Open: `supabase/migrations/20251114220000_make_recipient_optional.sql`
+   - Copy the entire contents
+   - Paste into the Supabase SQL Editor
+   - Click **Run**
+
+5. **Apply Migration 3:** Fix RLS Recursion
+   - Open: `supabase/migrations/20251114230000_fix_rls_recursion.sql`
    - Copy the entire contents
    - Paste into the Supabase SQL Editor
    - Click **Run**
@@ -38,6 +44,11 @@ The app has been refactored to use a Tricount-style expense model. You **MUST** 
 - In Tricount model, expenses don't have recipients - they have participants
 - This is a legacy field kept for backwards compatibility
 
+**Migration 3 (Fix RLS Recursion):**
+- **Fixes** infinite recursion error in expense_participants policies
+- Removes recursive policy checks that caused errors
+- Simplifies policies: users can see/edit if they created the expense or are a payer
+
 ### After Migrations:
 
 Your app will work with the new Tricount-style model:
@@ -48,7 +59,12 @@ Your app will work with the new Tricount-style model:
 
 ### If You See Errors:
 
-If you see database errors like "table expense_participants does not exist" or "null value in column recipient_id violates not-null constraint", it means the migrations haven't been applied yet. Follow the steps above to apply both migrations in order.
+Common errors and solutions:
+- **"table expense_participants does not exist"** → Apply Migration 1
+- **"null value in column recipient_id violates not-null constraint"** → Apply Migration 2
+- **"infinite recursion detected in policy"** → Apply Migration 3
+
+All three migrations must be applied **IN ORDER** for the app to work.
 
 ### Testing After Migrations:
 
