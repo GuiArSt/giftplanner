@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 
 interface NavbarProps {
@@ -11,12 +11,26 @@ interface NavbarProps {
 
 export default function Navbar({ userName, userRole }: NavbarProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
+  }
+
+  const isActive = (path: string) => {
+    if (path === '/dashboard') {
+      return pathname === '/dashboard'
+    }
+    return pathname?.startsWith(path)
+  }
+
+  const linkClass = (path: string) => {
+    return isActive(path)
+      ? 'inline-flex items-center border-b-2 border-blue-500 px-1 pt-1 text-sm font-medium text-gray-900'
+      : 'inline-flex items-center border-b-2 border-transparent px-1 pt-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700'
   }
 
   return (
@@ -30,29 +44,17 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
               </Link>
             </div>
             <div className="ml-6 flex space-x-8">
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center border-b-2 border-blue-500 px-1 pt-1 text-sm font-medium text-gray-900"
-              >
+              <Link href="/dashboard" className={linkClass('/dashboard')}>
                 Dashboard
               </Link>
-              <Link
-                href="/dashboard/expenses"
-                className="inline-flex items-center border-b-2 border-transparent px-1 pt-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
-              >
+              <Link href="/dashboard/expenses" className={linkClass('/dashboard/expenses')}>
                 Expenses
               </Link>
-              <Link
-                href="/dashboard/gifts"
-                className="inline-flex items-center border-b-2 border-transparent px-1 pt-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
-              >
+              <Link href="/dashboard/gifts" className={linkClass('/dashboard/gifts')}>
                 Gifts
               </Link>
               {userRole === 'admin' && (
-                <Link
-                  href="/admin"
-                  className="inline-flex items-center border-b-2 border-transparent px-1 pt-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                >
+                <Link href="/admin" className={linkClass('/admin')}>
                   Admin
                 </Link>
               )}
