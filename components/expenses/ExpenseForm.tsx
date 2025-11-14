@@ -117,7 +117,7 @@ export default function ExpenseForm({ users, gifts, currentUserId }: ExpenseForm
         }
       }
 
-      // Create expense
+      // Create expense (no recipient_id needed in Tricount model)
       const { data: expense, error: expenseError } = await supabase
         .from('expenses')
         .insert({
@@ -125,6 +125,7 @@ export default function ExpenseForm({ users, gifts, currentUserId }: ExpenseForm
           amount: totalAmount,
           description,
           created_by: currentUserId,
+          recipient_id: null, // Not used in Tricount model
         })
         .select()
         .single()
