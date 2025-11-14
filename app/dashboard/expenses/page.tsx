@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import ExpenseList from '@/components/expenses/ExpenseList'
 import BalanceDisplay from '@/components/expenses/BalanceDisplay'
 import Link from 'next/link'
-import { type Expense, type Gift } from '@/lib/calculations/balances'
+import { type Expense } from '@/lib/calculations/balances'
 
 export default async function ExpensesPage() {
   const supabase = await createClient()
@@ -25,26 +25,18 @@ export default async function ExpensesPage() {
   // Get all users
   const { data: users } = await supabase.from('users').select('id, name').order('name')
 
-  // Get ALL gifts user is involved in (for balance calculation)
-  const { data: allGiftsData } = await supabase
-    .from('gifts')
-    .select(`
-      *,
-      contributors:gift_contributors(
-        user_id,
-        allotment
-      )
-    `)
-    .order('created_at', { ascending: false})
-
-  // Get ALL expenses (linked to gifts)
+  // Get ALL expenses with participants and payers
   const { data: allExpensesData } = await supabase
     .from('expenses')
     .select(`
       *,
-      recipient:users!expenses_recipient_id_fkey(id, name),
       created_by_user:users!expenses_created_by_fkey(id, name),
-      contributors:expense_contributors(
+      participants:expense_participants(
+        user_id,
+        share_amount,
+        user:users(id, name)
+      ),
+      payers:expense_payers(
         user_id,
         amount_paid,
         user:users(id, name)
@@ -52,28 +44,28 @@ export default async function ExpensesPage() {
     `)
     .order('created_at', { ascending: false })
 
-  // Filter for display: hide expenses where user is recipient (privacy)
-  const expenses = allExpensesData?.filter((exp) => exp.recipient_id !== user.id) || []
+  // Filter for display: hide expenses where user is NOT involved (privacy)
+  const expenses = allExpensesData?.filter((exp) => {
+    const isParticipant = exp.participants.some((p: any) => p.user_id === user.id)
+    const isPayer = exp.payers.some((p: any) => p.user_id === user.id)
+    const isCreator = exp.created_by === user.id
+    const isAdmin = currentUser?.role === 'admin'
 
-  // Prepare data for balance calculation
-  const giftsForBalance: Gift[] =
-    allGiftsData?.map((g) => ({
-      id: g.id,
-      amount: g.amount,
-      contributors: g.contributors.map((c: any) => ({
-        user_id: c.user_id,
-        allotment: c.allotment,
-      })),
-    })) || []
+    return isParticipant || isPayer || isCreator || isAdmin
+  }) || []
 
+  // Prepare data for balance calculation (Tricount-style)
   const expensesForBalance: Expense[] =
     allExpensesData?.map((exp) => ({
       id: exp.id,
-      gift_id: exp.gift_id,
       amount: exp.amount,
-      contributors: exp.contributors.map((c: any) => ({
-        user_id: c.user_id,
-        amount_paid: c.amount_paid,
+      participants: exp.participants.map((p: any) => ({
+        user_id: p.user_id,
+        share_amount: p.share_amount,
+      })),
+      payers: exp.payers.map((p: any) => ({
+        user_id: p.user_id,
+        amount_paid: p.amount_paid,
       })),
     })) || []
 
@@ -95,7 +87,6 @@ export default async function ExpensesPage() {
         </div>
         <div>
           <BalanceDisplay
-            gifts={giftsForBalance}
             expenses={expensesForBalance}
             users={users || []}
             currentUserId={user.id}
