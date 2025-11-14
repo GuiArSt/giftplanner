@@ -1,0 +1,13 @@
+# Supabase local files
+supabase/.branches
+supabase/.temp
+
+# Environment files
+.env.local
+.env*.local
+
+# Development files
+node_modules
+.next
+
+
